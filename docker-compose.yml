@@ -1,47 +1,79 @@
-version: '3.9'
+version: "3.9"
+
 services:
   certificate-service:
     build: ./certificate-service
+    container_name: certificate-service
     ports:
       - "4000:4000"
     env_file:
-      - ./.env
+      - ./certificate-service/.env
     depends_on:
-      - mongo
-      - redis
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - appnet
 
   course-service:
     build: ./course-service
+    container_name: course-service
     ports:
       - "4100:4100"
     env_file:
-      - ./.env
+      - ./course-service/.env
     depends_on:
-      - mongo
-      - redis
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - appnet
 
   mongo:
     image: mongo:7
     container_name: mongo
+    restart: always
     ports:
       - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
+    networks:
+      - appnet
 
   redis:
-    image: redis:8
+    image: redis:7
     container_name: redis
+    restart: always
     ports:
       - "6379:6379"
+    networks:
+      - appnet
 
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     ports:
       - "5672:5672"
       - "15672:15672"
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 5s
+      retries: 5
+      start_period: 10s
 
-volumes:
-  mongo-data:
+networks:
+  appnet:
+
+
+
+

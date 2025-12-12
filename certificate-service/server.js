@@ -18,16 +18,43 @@ mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopol
 
 // Redis
 const redisClient = redis.createClient({ url: process.env.REDIS_URL });
-redisClient.connect().then(() => console.log('Redis connected'));
+redisClient.connect()
+  .then(() => console.log('Redis connected'))
+  .catch(err => console.error('Redis error:', err));
 
-// RabbitMQ
+// RabbitMQ with retry
 let channel;
-amqp.connect(process.env.RABBITMQ_URL).then(conn => conn.createChannel()).then(ch => {
-    channel = ch;
-    console.log('RabbitMQ connected');
-});
+async function connectRabbit() {
+  let connected = false;
+  let retries = 0;
+  while (!connected && retries < 10) {
+    try {
+      const conn = await amqp.connect(process.env.RABBITMQ_URL);
+      channel = await conn.createChannel();
+      console.log('RabbitMQ connected');
+      connected = true;
+    } catch (err) {
+      retries++;
+      console.log(`RabbitMQ connection failed, retrying in 5s... (${retries}/10)`);
+      await new Promise(res => setTimeout(res, 5000));
+    }
+  }
+  if (!connected) {
+    console.error('Could not connect to RabbitMQ, exiting.');
+    process.exit(1);
+  }
+}
+connectRabbit();
 
+// Routes
 app.use('/certificate', certificateRoutes);
 
 const PORT = process.env.CERTIFICATE_PORT || 4000;
 app.listen(PORT, () => console.log(`Certificate service running on port ${PORT}`));
+
+
+app.get('/certificate', (req, res) => {
+  res.send('Certificate service is running!');
+});
+
+
